@@ -234,6 +234,9 @@ function ItemSlot:OnEnter()
 				GameTooltip:SetInventoryItem('player', BankButtonIDToInvSlotID(self:GetID()))
 				GameTooltip:Show()
 				CursorUpdate(self)
+			elseif GameTooltip:IsOwned(self) then
+				--the item was just withdrawn, don't leave its tooltip up
+				GameTooltip:Hide()
 			end
 		else
 			ContainerFrameItemButton_OnEnter(self)

@@ -319,7 +319,16 @@ function ItemSlot:HideStackSplitFrame()
 end
 
 --tooltip methods
+--called repeatedly by the tooltip while hovering: re-anchor to clear previous lines,
+--otherwise an emptied slot keeps the old tooltip and hooks (Bagnon_Tooltips) add lines on every refresh
 function ItemSlot:UpdateTooltip()
+	self:AnchorTooltip()
+
+	if not self:GetItem() then
+		GameTooltip:Hide()
+		return
+	end
+
 	if self:IsCached() then
 		GameTooltip:SetHyperlink(self:GetItem())
 	else
