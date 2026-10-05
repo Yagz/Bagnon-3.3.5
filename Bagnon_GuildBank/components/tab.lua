@@ -129,7 +129,12 @@ function GuildTab:OnHide()
 	self:UpdateEvents()
 end
 
-function GuildTab:OnClick()
+function GuildTab:OnClick(button)
+	if button == 'RightButton' then
+		Bagnon.GuildTabEditor:Open(self:GetID(), self)
+		return
+	end
+
 	if self:IsPurchasable() then
 		self:PurchaseTab()
 		return
@@ -238,7 +243,20 @@ function GuildTab:IsPurchasable()
 	return IsGuildLeader() and self:GetID() == GetNumGuildBankTabs() + 1 and cost and cost > 0
 end
 
+--shows the standard red "not enough money" error, returns true if we can pay for the next tab
+local function canAffordTab()
+	if GetMoney() < (GetGuildBankTabCost() or 0) then
+		UIErrorsFrame:AddMessage(ERR_NOT_ENOUGH_MONEY or L.NotEnoughMoney, 1, 0.1, 0.1, 1)
+		return false
+	end
+	return true
+end
+
 function GuildTab:PurchaseTab()
+	if not canAffordTab() then
+		return
+	end
+
 	if not StaticPopupDialogs['CONFIRM_BUY_GUILDBANK_TAB_BAGNON'] then
 		StaticPopupDialogs['CONFIRM_BUY_GUILDBANK_TAB_BAGNON'] = {
 			text = CONFIRM_BUY_GUILDBANK_TAB or L.TipPurchaseGuildTab,
@@ -246,7 +264,10 @@ function GuildTab:PurchaseTab()
 			button2 = NO,
 
 			OnAccept = function()
-				BuyGuildBankTab()
+				--money may have changed while the popup was shown
+				if canAffordTab() then
+					BuyGuildBankTab()
+				end
 			end,
 
 			OnShow = function(self)
@@ -270,6 +291,9 @@ function GuildTab:UpdateTooltip()
 		GameTooltip:SetText(BUY_GUILDBANK_TAB or L.TipPurchaseGuildTab, 1, 1, 1)
 		GameTooltip:AddLine(L.TipPurchaseGuildTab)
 		SetTooltipMoney(GameTooltip, GetGuildBankTabCost())
+		if GetMoney() < GetGuildBankTabCost() then
+			GameTooltip:AddLine(ERR_NOT_ENOUGH_MONEY or L.NotEnoughMoney, 1, 0.1, 0.1)
+		end
 		GameTooltip:Show()
 		return
 	end
@@ -291,6 +315,10 @@ function GuildTab:UpdateTooltip()
 		end
 
 		GameTooltip:AddLine(access)
+
+		if Bagnon.GuildTabEditor:CanEdit(self:GetID()) then
+			GameTooltip:AddLine(L.TipEditGuildTab)
+		end
 	else
 		GameTooltip:SetText('Unavailable')
 	end

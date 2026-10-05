@@ -2,6 +2,7 @@
 	<Script file="components\item.lua"/>
 	<Script file="components\itemFrame.lua"/>
 	<Script file="components\tab.lua"/>
+	<Script file="components\tabEditor.lua"/>
 	<Script file="components\tabFrame.lua"/>
 	<Script file="components\logToggle.lua"/>
 	<Script file="components\logFrame.lua"/>
