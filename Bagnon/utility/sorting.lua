@@ -19,6 +19,11 @@ Sort.Properties = {
 
 Sort.init = false
 
+--the guild bank is server side: moves are slow, so do one at a time and wait a bit
+local BAG_DELAY = 0.05
+local GUILD_DELAY = 0.5
+local MAX_RUNS = 500
+
 function Sort:Init()
   Sort.init = true
   Sort.Classes = {}
@@ -43,13 +48,23 @@ function Sort:Start(itemFrame)
     self:Init()
   end
 
+  if self.timer then
+    self:CancelTimer(self.timer, true)
+    self.timer = nil
+  end
+
   self.itemFrame = itemFrame
+  self.guildTab = self:IsGuildBank() and itemFrame:GetCurrentTab() or nil
+  self.runs = 0
   --self:SendMessage('SORTING_STATUS', itemFrame)
   self:Run()
 end
 
 function Sort:Run()
-  if self:CanRun() then
+  self.timer = nil
+  self.runs = (self.runs or 0) + 1
+
+  if self:CanRun() and self:CanSortFrame() and self.runs <= MAX_RUNS then
     ClearCursor()
     self:Iterate()
   else
@@ -61,6 +76,8 @@ function Sort:Iterate()
   local spaces = self:GetSpaces()
   local families = self:GetFamilies(spaces)
   local updateRequired = false;
+  local maxMoves = self.guildTab and 1 or math.huge
+  local moves = 0
   local stackable = function(item)
     return (item.count or 1) < (item.stack or 1)
   end
@@ -73,8 +90,13 @@ function Sort:Iterate()
         local other = from.item
 
         if item.id == other.id and stackable(other) then
-          self:Move(from, target)
+          if self:Move(from, target) then
+            moves = moves + 1
+          end
           updateRequired = true
+        end
+        if moves >= maxMoves then
+          return self:Continue()
         end
       end
     end
@@ -107,51 +129,79 @@ function Sort:Iterate()
           end
         end
 
-        self:Move(item.space, goal)
+        if self:Move(item.space, goal) then
+          moves = moves + 1
+        end
         updateRequired = true
+
+        if moves >= maxMoves then
+          return self:Continue()
+        end
       end
     end
   end
 
   if updateRequired then
-    self:ScheduleTimer("Run", 0.05)
+    self:Continue()
   else
     self:Stop()
   end
 
 end
 
+function Sort:Continue()
+  self.timer = self:ScheduleTimer('Run', self.guildTab and GUILD_DELAY or BAG_DELAY)
+end
+
 function Sort:Stop()
+  self.guildTab = nil
   self.itemFrame:SendMessage('SORTING_STATUS')
 end
 
 
 --[[ Data Structures ]]--
 
+function Sort:AddSpace(spaces, bag, slot, family, texture, count, locked, quality, link)
+  local item = {}
+  tinsert(spaces, {index = #spaces, bag = bag, slot = slot, family = family, item = item, locked = locked})
+  item.space = spaces[#spaces]
+
+  if link then
+    local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount = GetItemInfo(link)
+    item.class = Sort.Classes[itemType] and Sort.Classes[itemType].index or 0
+    item.subclass = Sort.Classes[itemType] and Sort.Classes[itemType].subClasses[itemSubType] or 0
+    item.stack = itemStackCount
+    item.count = count or 1
+    item.id =  tonumber(link:match("item:(%d+)")) or 0
+    item.locked = locked
+    --values used by Sort.Rule must never be nil (item info may not be cached yet)
+    item.quality = quality or itemRarity or 0
+    item.icon = texture or ''
+    item.level = itemLevel or 0
+    item.name = itemName or ''
+  end
+end
+
 function Sort:GetSpaces()
   local spaces = {}
   local itemFrame = self.itemFrame
+
+  if self.guildTab then
+    local tab = self.guildTab
+    for slot = 1, itemFrame:GetCurrentTabSize() do
+      local texture, count, locked = GetGuildBankItemInfo(tab, slot)
+      local link = GetGuildBankItemLink(tab, slot)
+      self:AddSpace(spaces, tab, slot, 0, texture, count, locked, nil, link)
+    end
+    return spaces
+  end
+
   for _, bag in itemFrame:GetVisibleBags() do
     local family = Bagnon.BagSlotInfo:GetBagType(itemFrame:GetPlayer(), bag)
 		for slot = 1, itemFrame:GetBagSize(bag) do
 			local itemSlot = itemFrame:GetItemSlot(bag, slot)
       local texture, count, locked, quality, readable, lootable, link = itemSlot:GetItemSlotInfo()
-      local item = {}
-      tinsert(spaces, {index = #spaces, bag = bag, slot = slot, family = family, item = item})
-      item.space = spaces[#spaces]
-      if link then
-        local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount = GetItemInfo(link)
-        item.class = Sort.Classes[itemType] and Sort.Classes[itemType].index or 0
-        item.subclass = Sort.Classes[itemType] and Sort.Classes[itemType].subClasses[itemSubType] or 0
-        item.stack = itemStackCount
-        item.count = count
-        item.id =  tonumber(link:match("item:(%d+)")) or 0
-        item.locked = locked
-        item.quality = quality
-        item.icon = texture
-        item.level = itemLevel
-        item.name = itemName
-      end
+      self:AddSpace(spaces, bag, slot, family, texture, count, locked, quality, link)
 		end
 	end
   --[[
@@ -209,6 +259,18 @@ function Sort:CanRun()
   return not InCombatLockdown() and not UnitIsDead('player')
 end
 
+function Sort:IsGuildBank()
+  return self.itemFrame and self.itemFrame.GetVisibleBags == nil and self.itemFrame.GetCurrentTab ~= nil
+end
+
+--stop if the guild bank was closed or the tab changed while sorting
+function Sort:CanSortFrame()
+  if self.guildTab then
+    return self.itemFrame:IsVisible() and self.itemFrame:GetCurrentTab() == self.guildTab
+  end
+  return true
+end
+
 function Sort:FitsIn(id, family)
   if family == 9 then
     return GetItemFamily(id) == 256
@@ -236,8 +298,13 @@ function Sort:Move(from, to)
   end
 
   ClearCursor()
-  PickupContainerItem(from.bag, from.slot)
-  PickupContainerItem(to.bag, to.slot)
+  if self.guildTab then
+    PickupGuildBankItem(from.bag, from.slot)
+    PickupGuildBankItem(to.bag, to.slot)
+  else
+    PickupContainerItem(from.bag, from.slot)
+    PickupContainerItem(to.bag, to.slot)
+  end
   ClearCursor()
 
   from.locked = true
