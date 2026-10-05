@@ -4,6 +4,7 @@
 --]]
 
 local Bagnon = LibStub('AceAddon-3.0'):GetAddon('Bagnon')
+local L = LibStub('AceLocale-3.0'):GetLocale('Bagnon')
 local GuildTab = Bagnon.Classy:New('CheckButton')
 Bagnon.GuildTab = GuildTab
 
@@ -129,6 +130,15 @@ function GuildTab:OnHide()
 end
 
 function GuildTab:OnClick()
+	if self:IsPurchasable() then
+		self:PurchaseTab()
+		return
+	end
+
+	if not self:IsPurchased() then
+		return
+	end
+
 	SetCurrentGuildBankTab(self:GetID())
 	QueryGuildBankTab(self:GetID())
 	self:SendMessage('GUILD_BANK_TAB_CHANGE', self:GetID())
@@ -216,9 +226,54 @@ function GuildTab:IsCurrentTab()
 end
 
 
+--[[ Purchasing ]]--
+
+function GuildTab:IsPurchased()
+	return self:GetID() <= GetNumGuildBankTabs()
+end
+
+--only the guild leader can buy tabs, and only the next one in line
+function GuildTab:IsPurchasable()
+	local cost = GetGuildBankTabCost()
+	return IsGuildLeader() and self:GetID() == GetNumGuildBankTabs() + 1 and cost and cost > 0
+end
+
+function GuildTab:PurchaseTab()
+	if not StaticPopupDialogs['CONFIRM_BUY_GUILDBANK_TAB_BAGNON'] then
+		StaticPopupDialogs['CONFIRM_BUY_GUILDBANK_TAB_BAGNON'] = {
+			text = CONFIRM_BUY_GUILDBANK_TAB or L.TipPurchaseGuildTab,
+			button1 = YES,
+			button2 = NO,
+
+			OnAccept = function()
+				BuyGuildBankTab()
+			end,
+
+			OnShow = function(self)
+				MoneyFrame_Update(self:GetName() .. 'MoneyFrame', GetGuildBankTabCost())
+			end,
+
+			hasMoneyFrame = 1,
+			timeout = 0,
+			hideOnEscape = 1,
+		}
+	end
+
+	StaticPopup_Show('CONFIRM_BUY_GUILDBANK_TAB_BAGNON')
+end
+
+
 --[[ Tooltip Methods ]]--
 
 function GuildTab:UpdateTooltip()
+	if self:IsPurchasable() then
+		GameTooltip:SetText(BUY_GUILDBANK_TAB or L.TipPurchaseGuildTab, 1, 1, 1)
+		GameTooltip:AddLine(L.TipPurchaseGuildTab)
+		SetTooltipMoney(GameTooltip, GetGuildBankTabCost())
+		GameTooltip:Show()
+		return
+	end
+
 	local name, icon, isViewable, canDeposit, numWithdrawals, remainingWithdrawals = GetGuildBankTabInfo(self:GetID())
 
 	if name then
