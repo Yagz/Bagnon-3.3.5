@@ -1,6 +1,6 @@
 # Bagnon for WoW 3.3.5
 
-A backport of [Bagnon](https://www.curseforge.com/wow/addons/bagnon), Tuller's single-window bag addon, for the **World of Warcraft 3.3.5a (Wrath of the Lich King)** client (`Interface: 30300`).
+A backport of [Bagnon](https://www.curseforge.com/wow/addons/bagnon), Tuller's single-window bag addon, for the **World of Warcraft 3.3.5a (Wrath of the Lich King).
 
 Bagnon merges all your bags into one window, and does the same for your bank, keyring and guild bank. It also lets you browse the inventory of your other characters and search through your items.
 
@@ -31,18 +31,6 @@ Interface/AddOns/
 
 To get the guild bank window, enable *Bagnon Guild Bank* in the addon list on the character selection screen.
 
-### Development setup
-
-Symlink the folders instead of copying them, so your changes show up in game after a `/reload`:
-
-```sh
-for d in /path/to/Bagnon-3.3.5/Bagnon*/; do
-    ln -sfn "${d%/}" "/path/to/World of Warcraft/Interface/AddOns/"
-done
-```
-
-Restart the client fully after adding a new Lua file or `.toc` entry, since `/reload` may not pick up new files.
-
 ## Usage
 
 - **Slash commands**: `/bagnon` or `/bgn`, followed by `bags`, `bank`, `keys`, `config`, `version` or `help`.
@@ -67,4 +55,4 @@ This port started from an older Bagnon release and adjusts it to the 3.3.5 API. 
 ## Credits
 
 - Original addon: **Tuller**.
-- 3.3.5 backport: Richard Steininger, 5Buttons and Yagz.
+- 3.3.5 backport: Richard Steininger, 5Buttons.
